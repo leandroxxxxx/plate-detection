@@ -17,15 +17,22 @@ def main():
     print(f"Gerando placa: {plate_text}...")
     final_image = generator.create_plate(plate_text)
     
-    # Redimensiona (Resize)
-    target_size = (145, 48)
-    print(f"Redimensionando para {target_size}...")
-    resized_image = ImageEffectProcessor.resize_image(final_image, target_size)
+    # Aplica Motion Blur (Movimento)
+    print("Aplicando Motion Blur...")
+    blurred_image = ImageEffectProcessor.apply_motion_blur(final_image, angle=0, intensity=8)
+    
+    # Aplica Sharpening (O realce artificial da câmera)
+    print("Aplicando Realce de Câmera (Sharpening)...")
+    sharpened_image = ImageEffectProcessor.apply_cctv_sharpening(blurred_image, percent=200)
+    
+    # Aplica Noise (Ruído)
+    print("Aplicando Ruído...")
+    noisy_image = ImageEffectProcessor.apply_noise(sharpened_image, intensity=0.10)
     
     # Aplica simulação de H.264 (Degradação)
-    degradation_level = 150
+    degradation_level = 520
     print(f"Gerando versão H.264 (Nível {degradation_level})...")
-    h264_image = ImageEffectProcessor.apply_h264_simulation(resized_image, degradation_level)
+    h264_image = ImageEffectProcessor.apply_h264_simulation(noisy_image, degradation_level)
     
     # Salvamento
     output_dir = 'generated-images'
