@@ -13,7 +13,7 @@ class WatermarkConfig:
 @dataclass
 class PlateConfig:
     width: int = 520
-    height: int = 170
+    height: int = 130
     bg_color: Tuple[int, int, int, int] = (200, 200, 200, 255)
     font_path: str = "fonts/FE-Schrift.ttf"
     font_size: int = 100
