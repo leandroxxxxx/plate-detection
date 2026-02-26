@@ -1,7 +1,7 @@
 import io
 import os
 import math
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageEnhance
 from typing import Tuple
 
 class ImageEffectProcessor:
@@ -79,7 +79,6 @@ class ImageEffectProcessor:
     @staticmethod
     def apply_low_dynamic_range(image: Image.Image, contrast: float = 0.8) -> Image.Image:
         """Simula a perda de detalhe em sombras e luzes (contraste de sensor barato)."""
-        from PIL import ImageEnhance
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(contrast)
         return image
