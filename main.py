@@ -15,7 +15,7 @@ def main():
     effects = inputs.get("effects", {})
     output_dir = inputs.get("output_dir", "generated-images")
 
-    # Configuração
+    # Configuração da placa (padrão)
     config = PlateConfig()
 
     # Inicializa o gerador

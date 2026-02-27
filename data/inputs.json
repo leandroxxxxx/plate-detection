@@ -3,21 +3,18 @@
         "AOX5G10"
     ],
     "degradation_levels": [
-        520,
-        530,
-        540,
-        550
+        85
     ],
     "effects": {
         "motion_blur": {
-            "angle": 0,
-            "intensity": 8
+            "angle": 15,
+            "intensity": 5
         },
         "sharpening": {
-            "percent": 200
+            "percent": 180
         },
         "noise": {
-            "intensity": 0.10
+            "intensity": 0.05
         }
     },
     "output_dir": "generated-images"
