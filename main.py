@@ -1,18 +1,23 @@
 import os
+import json
 from src.config import PlateConfig
 from src.plate import PlateGenerator
 from src.post_process import ImageEffectProcessor
 
 def main():
+    # Carrega dados de entrada do arquivo JSON
+    input_path = os.path.join('data', 'inputs.json')
+    with open(input_path, 'r') as f:
+        inputs = json.load(f)
+
+    plates_data = inputs.get("plates_data", [])
+    degradation_levels = inputs.get("degradation_levels", [])
+
     # Configuração
     config = PlateConfig()
 
     # Inicializa o gerador
     generator = PlateGenerator(config)
-
-    # Dados de entrada
-    plates_data = ["ABC1D23", "XYZ9W87", "9W", "XY"]
-    degradation_levels = [520, 530, 540, 550] # Lista de níveis de degradação
 
     # Salvamento
     output_dir = 'generated-images'
