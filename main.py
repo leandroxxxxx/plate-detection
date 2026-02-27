@@ -12,6 +12,8 @@ def main():
 
     plates_data = inputs.get("plates_data", [])
     degradation_levels = inputs.get("degradation_levels", [])
+    effects = inputs.get("effects", {})
+    output_dir = inputs.get("output_dir", "generated-images")
 
     # Configuração
     config = PlateConfig()
@@ -20,7 +22,6 @@ def main():
     generator = PlateGenerator(config)
 
     # Salvamento
-    output_dir = 'generated-images'
     os.makedirs(output_dir, exist_ok=True)
 
     for plate_text in plates_data:
@@ -29,16 +30,23 @@ def main():
         final_image = generator.create_plate(plate_text)
         
         # Aplica Motion Blur (Movimento)
+        mb_cfg = effects.get("motion_blur", {})
         print("Aplicando Motion Blur...")
-        blurred_image = ImageEffectProcessor.apply_motion_blur(final_image, angle=0, intensity=8)
+        blurred_image = ImageEffectProcessor.apply_motion_blur(
+            final_image,
+            angle=mb_cfg.get("angle", 0),
+            intensity=mb_cfg.get("intensity", 0)
+        )
         
         # Aplica Sharpening (O realce artificial da câmera)
+        sharp_cfg = effects.get("sharpening", {})
         print("Aplicando Realce de Câmera (Sharpening)...")
-        sharpened_image = ImageEffectProcessor.apply_cctv_sharpening(blurred_image, percent=200)
+        sharpened_image = ImageEffectProcessor.apply_cctv_sharpening(blurred_image, percent=sharp_cfg.get("percent", 100))
         
         # Aplica Noise (Ruído)
+        noise_cfg = effects.get("noise", {})
         print("Aplicando Ruído...")
-        noisy_image = ImageEffectProcessor.apply_noise(sharpened_image, intensity=0.10)
+        noisy_image = ImageEffectProcessor.apply_noise(sharpened_image, intensity=noise_cfg.get("intensity", 0))
         
         # Salva original
         output_path = os.path.join(output_dir, f'placa_{plate_text}_h264_lvl0.jpg')
