@@ -13,7 +13,8 @@ def main():
     plates_data = inputs.get("plates_data", [])
     degradation_levels = inputs.get("degradation_levels", [])
     effects = inputs.get("effects", {})
-    output_dir = inputs.get("output_dir", "generated-images")
+    base_output_dir = inputs.get("output_dir", "generated-images")
+    output_dir = os.path.join(base_output_dir, "plates")
 
     # Configuração da placa (padrão)
     config = PlateConfig()

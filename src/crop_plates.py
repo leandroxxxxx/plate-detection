@@ -11,11 +11,18 @@ Uso:
 
 import os
 import re
+import sys
 import argparse
 from PIL import Image, ImageDraw, ImageFont
 
-from .config import PlateConfig, CropConfig
-from .utils import TextUtils
+# Ensure the project root is in sys.path so absolute imports work
+# when running this script directly with `python src/crop_plates.py`
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.config import PlateConfig, CropConfig
+from src.utils import TextUtils
 
 
 def extract_plate_text_from_filename(filename: str) -> str | None:
@@ -218,8 +225,8 @@ def main():
     parser.add_argument(
         '--input-dir',
         type=str,
-        default='generated-images',
-        help='Diretório com as imagens de placas (default: generated-images)'
+        default='generated-images/plates',
+        help='Diretório com as imagens de placas (default: generated-images/plates)'
     )
     parser.add_argument(
         '--output-dir',
@@ -258,7 +265,7 @@ def main():
         print(f"Erro: Diretório '{input_dir}' não encontrado.")
         return
     
-    output_dir = args.output_dir or os.path.join(input_dir, "crops")
+    output_dir = args.output_dir or os.path.join(os.path.dirname(input_dir), "crop")
     
     # Configurações
     plate_config = PlateConfig()
