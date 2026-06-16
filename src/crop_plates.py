@@ -137,7 +137,7 @@ def crop_character_pairs(
         scale_x = img_width / plate_config.width
         scale_y = img_height / plate_config.height
         
-        mid_x_px = mid_x * scale_x
+        mid_x_px = mid_x * scale_x + crop_config.offset_x
         cy_px = cy * scale_y
         
         # Calcula os cantos do retângulo de corte
@@ -202,15 +202,16 @@ def process_plate_image(
     
     crops = crop_character_pairs(image, plate_text, plate_config, crop_config)
     
-    # Cria subdiretório de saída para esta placa
-    plate_name = os.path.splitext(filename)[0]
-    plate_output_dir = os.path.join(output_dir, plate_name)
-    os.makedirs(plate_output_dir, exist_ok=True)
+    # # Cria subdiretório de saída para esta placa (comentado: salva tudo na pasta crop)
+    # plate_name = os.path.splitext(filename)[0]
+    # plate_output_dir = os.path.join(output_dir, plate_name)
+    # os.makedirs(plate_output_dir, exist_ok=True)
     
     saved_files = []
+    plate_name = os.path.splitext(filename)[0]
     for pair_text, cropped_img in crops:
         output_filename = f"{plate_name}_{crop_config.file_suffix}_{pair_text}.jpg"
-        output_path = os.path.join(plate_output_dir, output_filename)
+        output_path = os.path.join(output_dir, output_filename)
         cropped_img.save(output_path, 'JPEG')
         saved_files.append(output_path)
         print(f"    → Salvo: {output_filename} (tamanho: {cropped_img.size})")
@@ -253,6 +254,12 @@ def main():
         help='Sobrescreve a altura do corte em porcentagem da altura da placa'
     )
     parser.add_argument(
+        '--offset-x',
+        type=int,
+        default=None,
+        help='Deslocamento horizontal em pixels para centralizar o corte (default: -1)'
+    )
+    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Apenas lista os pares sem gerar os cortes'
@@ -275,6 +282,8 @@ def main():
         crop_config.width_percent = args.width_percent
     if args.height_percent is not None:
         crop_config.height_percent = args.height_percent
+    if args.offset_x is not None:
+        crop_config.offset_x = args.offset_x
     
     print("=" * 60)
     print("CORTE DE PARES DE CARACTERES DE PLACAS")
@@ -284,6 +293,7 @@ def main():
     print(f"  Diretório de saída:   {output_dir}")
     print(f"  Largura do corte:     {crop_config.width_percent}% da placa")
     print(f"  Altura do corte:      {crop_config.height_percent}% da placa")
+    print(f"  Offset X:             {crop_config.offset_x} px")
     print(f"  Tamanho da placa:     {plate_config.width}x{plate_config.height}")
     print(f"  Dry-run:              {'Sim' if args.dry_run else 'Não'}")
     

@@ -17,7 +17,7 @@ class WatermarkConfig:
 class PlateConfig:
     # width: int = 520
     # height: int = 130
-    width: int = 75
+    width: int = 80
     height: int = 25
     bg_color: Tuple[int, int, int, int] = (200, 200, 200, 255)
     header_color: Tuple[int, int, int, int] = (0, 51, 153, 255) # Azul Mercosul
@@ -42,7 +42,8 @@ class CropConfig:
         output_subdir: Subdiretório dentro do diretório de saída para salvar os cortes.
         file_suffix: Sufixo adicionado ao nome do arquivo original para identificar cortes.
     """
-    width_percent: float = 30.0
+    width_percent: float = 28
     height_percent: float = 100.0
+    offset_x: int = 2
     output_subdir: str = "crops"
     file_suffix: str = "_pair"

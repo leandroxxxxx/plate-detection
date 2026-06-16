@@ -2,6 +2,7 @@ import os
 import json
 from src.config import PlateConfig
 from src.plate import PlateGenerator
+from src.plate_generator import RandomPlateGenerator
 from src.post_process import ImageEffectProcessor
 
 def main():
@@ -10,11 +11,18 @@ def main():
     with open(input_path, 'r') as f:
         inputs = json.load(f)
 
-    plates_data = inputs.get("plates_data", [])
+    num_plates = inputs.get("num_plates", 1)
+    seed = inputs.get("seed", None)
     degradation_levels = inputs.get("degradation_levels", [])
     effects = inputs.get("effects", {})
     base_output_dir = inputs.get("output_dir", "generated-images")
     output_dir = os.path.join(base_output_dir, "plates")
+
+    # Gera placas aleatórias no formato Mercosul
+    print(f"\n--- Gerando {num_plates} placas aleatórias (seed={seed}) ---")
+    plate_generator = RandomPlateGenerator(seed=seed)
+    plates_data = plate_generator.generate_plates(num_plates)
+    print(f"Total de placas geradas: {len(plates_data)}")
 
     # Configuração da placa (padrão)
     config = PlateConfig()
@@ -49,10 +57,10 @@ def main():
         print("Aplicando Ruído...")
         noisy_image = ImageEffectProcessor.apply_noise(sharpened_image, intensity=noise_cfg.get("intensity", 0))
         
-        # Salva original
-        output_path = os.path.join(output_dir, f'placa_{plate_text}_h264_lvl0.jpg')
-        final_image.save(output_path, 'JPEG')
-        print(f"Imagem original salva em: {output_path}")
+        # # Salva original (comentado: apenas versões com degradação são geradas)
+        # output_path = os.path.join(output_dir, f'placa_{plate_text}_h264_lvl0.jpg')
+        # final_image.save(output_path, 'JPEG')
+        # print(f"Imagem original salva em: {output_path}")
 
         # Itera sobre os níveis de degradação
         for level in degradation_levels:

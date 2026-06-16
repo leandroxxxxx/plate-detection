@@ -1,7 +1,6 @@
 {
-    "plates_data": [
-        "AOX5G10"
-    ],
+    "num_plates": 200,
+    "seed": 42,
     "degradation_levels": [
         85
     ],
