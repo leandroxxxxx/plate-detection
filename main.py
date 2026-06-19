@@ -33,9 +33,11 @@ def main():
     # Salvamento
     os.makedirs(output_dir, exist_ok=True)
 
+    count = 1
     for plate_text in plates_data:
         # Geração
         print(f"\n--- Processando placa: {plate_text} ---")
+        print(f"Nº: {count}")
         final_image = generator.create_plate(plate_text)
         
         # Aplica Motion Blur (Movimento)
@@ -74,6 +76,7 @@ def main():
             output_h264_path = os.path.join(output_dir, f'placa_{plate_text}_h264_lvl{level}.jpg')
             h264_image.save(output_h264_path, 'JPEG')
             print(f"Imagem H.264 (Nível {level}) salva em: {output_h264_path}")
+        count += 1
 
 if __name__ == "__main__":
     main()
