@@ -1,19 +1,20 @@
 {
-    "num_plates": 200,
+    "num_plates": 1,
+    "versions_per_plate": 3,
     "seed": 42,
-    "degradation_levels": [
-        85
-    ],
     "effects": {
         "motion_blur": {
-            "angle": 15,
-            "intensity": 5
+            "angle_range": [10, 20],
+            "intensity_range": [3, 7]
         },
         "sharpening": {
-            "percent": 180
+            "percent_range": [150, 210]
         },
         "noise": {
-            "intensity": 0.05
+            "intensity_range": [0.03, 0.07]
+        },
+        "h264": {
+            "degradation_level_range": [80, 90]
         }
     },
     "output_dir": "generated-images"
