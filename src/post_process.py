@@ -2,13 +2,135 @@ import io
 import os
 import math
 from PIL import Image, ImageFilter, ImageEnhance
-from typing import Tuple
+from typing import List, Sequence, Tuple
 
 class ImageEffectProcessor:
     """
     Classe responsável por aplicar filtros e degradações em imagens
     para simular cenários reais de captura de vídeo.
     """
+
+    @staticmethod
+    def _solve_linear_system(matrix: List[List[float]]) -> List[float]:
+        """Resolve um sistema linear por eliminação de Gauss com pivoteamento."""
+        size = len(matrix)
+        for column in range(size):
+            pivot = max(range(column, size), key=lambda row: abs(matrix[row][column]))
+            if abs(matrix[pivot][column]) < 1e-12:
+                raise ValueError("Não foi possível calcular a transformação de perspectiva.")
+            matrix[column], matrix[pivot] = matrix[pivot], matrix[column]
+
+            divisor = matrix[column][column]
+            matrix[column] = [value / divisor for value in matrix[column]]
+
+            for row in range(size):
+                if row == column:
+                    continue
+                factor = matrix[row][column]
+                matrix[row] = [
+                    current - factor * reference
+                    for current, reference in zip(matrix[row], matrix[column])
+                ]
+
+        return [matrix[row][-1] for row in range(size)]
+
+    @staticmethod
+    def _perspective_coefficients(
+        source: Sequence[Tuple[float, float]],
+        destination: Sequence[Tuple[float, float]]
+    ) -> List[float]:
+        """Calcula os coeficientes que mapeiam o destino de volta à origem."""
+        matrix = []
+        for (source_x, source_y), (dest_x, dest_y) in zip(source, destination):
+            matrix.append([
+                dest_x, dest_y, 1, 0, 0, 0,
+                -source_x * dest_x, -source_x * dest_y, source_x
+            ])
+            matrix.append([
+                0, 0, 0, dest_x, dest_y, 1,
+                -source_y * dest_x, -source_y * dest_y, source_y
+            ])
+        return ImageEffectProcessor._solve_linear_system(matrix)
+
+    @staticmethod
+    def apply_perspective_distortion(
+        image: Image.Image,
+        camera_elevation: float,
+        horizontal_angle: float = 0.0
+    ) -> Image.Image:
+        """
+        Simula uma placa observada por uma câmera instalada acima do veículo.
+
+        ``camera_elevation`` representa a inclinação vertical da câmera em graus.
+        ``horizontal_angle`` adiciona uma pequena visão lateral, também em graus.
+        O tamanho final da imagem é preservado.
+        """
+        elevation = max(0.0, min(75.0, float(camera_elevation)))
+        horizontal = max(-45.0, min(45.0, float(horizontal_angle)))
+        if elevation == 0 and horizontal == 0:
+            return image.copy()
+
+        width, height = image.size
+        max_x = float(width - 1)
+        max_y = float(height - 1)
+
+        elevation_factor = math.sin(math.radians(elevation))
+        horizontal_factor = math.sin(math.radians(horizontal))
+
+        # A vista superior comprime a placa verticalmente. O trapézio deixa a
+        # borda superior ligeiramente maior, pois ela está mais perto da câmera.
+        vertical_scale = 1.0 - (0.35 * elevation_factor)
+        transformed_height = max_y * vertical_scale
+        top_y = (max_y - transformed_height) / 2.0
+        bottom_y = top_y + transformed_height
+
+        outer_margin = max_x * 0.025
+        bottom_taper = max_x * (0.035 + 0.075 * elevation_factor)
+        horizontal_shift = max_x * 0.08 * horizontal_factor
+        vertical_skew = max_y * 0.12 * horizontal_factor
+
+        destination = [
+            (outer_margin + horizontal_shift, top_y - vertical_skew),
+            (max_x - outer_margin + horizontal_shift, top_y + vertical_skew),
+            (
+                max_x - outer_margin - bottom_taper - horizontal_shift,
+                bottom_y + vertical_skew
+            ),
+            (
+                outer_margin + bottom_taper - horizontal_shift,
+                bottom_y - vertical_skew
+            )
+        ]
+        source = [
+            (0.0, 0.0),
+            (max_x, 0.0),
+            (max_x, max_y),
+            (0.0, max_y)
+        ]
+        coefficients = ImageEffectProcessor._perspective_coefficients(
+            source, destination
+        )
+        fill_color = image.getpixel((0, height - 1))
+
+        return image.transform(
+            image.size,
+            Image.Transform.PERSPECTIVE,
+            coefficients,
+            resample=Image.Resampling.BICUBIC,
+            fillcolor=fill_color
+        )
+
+    @staticmethod
+    def apply_rotation(image: Image.Image, angle: float) -> Image.Image:
+        """Aplica uma pequena rotação óptica preservando o tamanho da imagem."""
+        if angle == 0:
+            return image.copy()
+        return image.rotate(
+            angle,
+            resample=Image.Resampling.BICUBIC,
+            expand=False,
+            fillcolor=image.getpixel((0, image.height - 1))
+        )
 
     @staticmethod
     def resize_image(image: Image.Image, size: Tuple[int, int]) -> Image.Image:

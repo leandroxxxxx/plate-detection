@@ -3,6 +3,13 @@
     "versions_per_plate": 3,
     "seed": 42,
     "effects": {
+        "perspective": {
+            "camera_elevation_range": [30, 60],
+            "horizontal_angle_range": [-15, 15]
+        },
+        "rotation": {
+            "angle_range": [-5, 5]
+        },
         "motion_blur": {
             "angle_range": [10, 20],
             "intensity_range": [3, 7]

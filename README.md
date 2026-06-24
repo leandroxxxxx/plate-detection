@@ -10,6 +10,8 @@ For each license plate, the project:
 4. applies motion blur, sharpening, noise, and simulated H.264 compression;
 5. saves the image and a JSON label containing the applied parameters.
 
+An optional second stage extracts consecutive character pairs from each plate. Perspective distortion and rotation are applied independently to each extracted pair, simulating variations from elevated security cameras without distorting the complete plate image.
+
 ## Requirements
 
 - Python 3
@@ -33,6 +35,13 @@ Image generation is controlled by `data/inputs.json`:
     "versions_per_plate": 3,
     "seed": 42,
     "effects": {
+        "perspective": {
+            "camera_elevation_range": [30, 60],
+            "horizontal_angle_range": [-15, 15]
+        },
+        "rotation": {
+            "angle_range": [-5, 5]
+        },
         "motion_blur": {
             "angle_range": [10, 20],
             "intensity_range": [3, 7]
@@ -57,6 +66,9 @@ Main options:
 - `versions_per_plate`: number of variations generated for each plate.
 - `seed`: controls license plate generation and parameter randomization.
 - `output_dir`: directory where images and labels are saved.
+- `camera_elevation_range`: vertical camera angle independently applied to each character pair. The default 30–60° range simulates cameras mounted above vehicles.
+- `horizontal_angle_range`: lateral perspective angle independently applied to each pair.
+- `rotation.angle_range`: independent in-plane rotation for each pair. A moderate ±5° avoids unrealistic diagonal crops.
 - `angle_range`: motion blur angle range, in degrees.
 - `intensity_range`: motion blur or noise intensity range, depending on the effect.
 - `percent_range`: sharpening strength range.
@@ -120,6 +132,8 @@ Each image and its label share the same base filename. A label has the following
 
 ## Applied Effects
 
+- **Perspective distortion (character pairs only):** simulates vertical foreshortening and trapezoidal distortion caused by a camera mounted above and to the side of a vehicle.
+- **Rotation (character pairs only):** adds a small in-plane camera or vehicle alignment variation while preserving the crop dimensions.
 - **Motion blur:** overlays shifted copies of the image to simulate movement.
 - **Sharpening:** enhances edges and creates halos similar to those produced by security cameras.
 - **Noise:** blends the image with RGB noise to simulate grain or high ISO.
@@ -129,13 +143,23 @@ The `seed` reproduces the license plates and randomized parameter values. Howeve
 
 ## Character-Pair Cropping
 
-The project also includes an optional tool that extracts character pairs from generated license plates:
+The project also includes an optional tool that extracts consecutive character pairs from generated license plates. Perspective and rotation values are randomized separately for every pair:
 
 ```bash
 python3 -m src.crop_plates
 ```
 
-By default, it reads images from `generated-images/plates` and saves the crops to `generated-images/crop`. To see all available options, run:
+By default, it reads images from `generated-images/plates`, saves transformed crops to `generated-images/crop`, and writes matching metadata to `generated-images/crop-labels`:
+
+```text
+generated-images/
+├── crop/
+│   └── placa_RAG3E76_v01_pair_01_RA.jpg
+└── crop-labels/
+    └── placa_RAG3E76_v01_pair_01_RA.json
+```
+
+Each pair label records its position, text, camera elevation, horizontal perspective angle, and rotation. To see all available options, run:
 
 ```bash
 python3 -m src.crop_plates --help

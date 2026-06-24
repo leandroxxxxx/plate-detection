@@ -12,6 +12,8 @@ Uso:
 import os
 import re
 import sys
+import json
+import random
 import argparse
 from PIL import Image, ImageDraw, ImageFont
 
@@ -22,7 +24,22 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.config import PlateConfig, CropConfig
+from src.post_process import ImageEffectProcessor
 from src.utils import TextUtils
+
+
+def random_value(config, key, default, rng):
+    """Sorteia um valor decimal no ``<key>_range`` configurado."""
+    value_range = config.get(f"{key}_range")
+    if value_range is None:
+        return default
+    if not isinstance(value_range, list) or len(value_range) != 2:
+        raise ValueError(f"'{key}_range' deve ser uma lista com [mínimo, máximo].")
+
+    minimum, maximum = value_range
+    if minimum > maximum:
+        raise ValueError(f"O mínimo de '{key}_range' não pode ser maior que o máximo.")
+    return rng.uniform(float(minimum), float(maximum))
 
 
 def extract_plate_text_from_filename(filename: str) -> str | None:
@@ -30,11 +47,7 @@ def extract_plate_text_from_filename(filename: str) -> str | None:
     Extrai o texto da placa do nome do arquivo.
     Ex: 'placa_AOX5G10_h264_lvl0.jpg' -> 'AOX5G10'
     """
-    match = re.search(r'placa_([A-Z0-9]+)_h264', filename)
-    if match:
-        return match.group(1)
-    
-    match = re.search(r'placa_([A-Z0-9]+)\.', filename)
+    match = re.search(r'placa_([A-Z0-9]+)(?:_|\.)', filename)
     if match:
         return match.group(1)
     
@@ -175,7 +188,10 @@ def process_plate_image(
     output_dir: str,
     plate_config: PlateConfig,
     crop_config: CropConfig,
-    dry_run: bool = False
+    dry_run: bool = False,
+    effects: dict | None = None,
+    rng: random.Random | None = None,
+    labels_dir: str | None = None
 ) -> list[str]:
     """
     Processa uma única imagem de placa: extrai os pares e salva os cortes.
@@ -201,6 +217,8 @@ def process_plate_image(
     image = Image.open(image_path).convert('RGB')
     
     crops = crop_character_pairs(image, plate_text, plate_config, crop_config)
+    effects = effects or {}
+    rng = rng or random.Random()
     
     # # Cria subdiretório de saída para esta placa (comentado: salva tudo na pasta crop)
     # plate_name = os.path.splitext(filename)[0]
@@ -209,12 +227,55 @@ def process_plate_image(
     
     saved_files = []
     plate_name = os.path.splitext(filename)[0]
-    for pair_text, cropped_img in crops:
-        output_filename = f"{plate_name}_{crop_config.file_suffix}_{pair_text}.jpg"
+    for pair_index, (pair_text, cropped_img) in enumerate(crops, start=1):
+        perspective_cfg = effects.get("perspective", {})
+        camera_elevation = random_value(
+            perspective_cfg, "camera_elevation", 0, rng
+        )
+        horizontal_angle = random_value(
+            perspective_cfg, "horizontal_angle", 0, rng
+        )
+        rotation_cfg = effects.get("rotation", {})
+        rotation_angle = random_value(rotation_cfg, "angle", 0, rng)
+
+        processed_crop = ImageEffectProcessor.apply_perspective_distortion(
+            cropped_img,
+            camera_elevation=camera_elevation,
+            horizontal_angle=horizontal_angle
+        )
+        processed_crop = ImageEffectProcessor.apply_rotation(
+            processed_crop, angle=rotation_angle
+        )
+
+        file_suffix = crop_config.file_suffix.strip("_")
+        output_stem = f"{plate_name}_{file_suffix}_{pair_index:02d}_{pair_text}"
+        output_filename = f"{output_stem}.jpg"
         output_path = os.path.join(output_dir, output_filename)
-        cropped_img.save(output_path, 'JPEG')
+        processed_crop.save(output_path, 'JPEG')
         saved_files.append(output_path)
-        print(f"    → Salvo: {output_filename} (tamanho: {cropped_img.size})")
+        print(
+            f"    → Salvo: {output_filename} (tamanho: {processed_crop.size}, "
+            f"elevação: {camera_elevation:.2f}°, lateral: "
+            f"{horizontal_angle:.2f}°, rotação: {rotation_angle:.2f}°)"
+        )
+
+        if labels_dir is not None:
+            label_path = os.path.join(labels_dir, f"{output_stem}.json")
+            label = {
+                "source_image": filename,
+                "plate": plate_text,
+                "pair": pair_text,
+                "pair_index": pair_index,
+                "perspective": {
+                    "camera_elevation": camera_elevation,
+                    "horizontal_angle": horizontal_angle
+                },
+                "rotation": {
+                    "angle": rotation_angle
+                }
+            }
+            with open(label_path, "w", encoding="utf-8") as label_file:
+                json.dump(label, label_file, ensure_ascii=False, indent=4)
     
     return saved_files
 
@@ -222,6 +283,12 @@ def process_plate_image(
 def main():
     parser = argparse.ArgumentParser(
         description="Extrai cortes de pares de caracteres de imagens de placas."
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='data/inputs.json',
+        help='Arquivo com ranges e seed (default: data/inputs.json)'
     )
     parser.add_argument(
         '--input-dir',
@@ -234,6 +301,12 @@ def main():
         type=str,
         default=None,
         help='Diretório de saída para os cortes (default: <input-dir>/crops)'
+    )
+    parser.add_argument(
+        '--labels-dir',
+        type=str,
+        default=None,
+        help='Diretório das labels (default: <input-dir>/../crop-labels)'
     )
     parser.add_argument(
         '--pattern',
@@ -273,6 +346,14 @@ def main():
         return
     
     output_dir = args.output_dir or os.path.join(os.path.dirname(input_dir), "crop")
+    labels_dir = args.labels_dir or os.path.join(
+        os.path.dirname(input_dir), "crop-labels"
+    )
+
+    with open(args.config, "r", encoding="utf-8") as config_file:
+        inputs = json.load(config_file)
+    effects = inputs.get("effects", {})
+    effects_rng = random.Random(inputs.get("seed"))
     
     # Configurações
     plate_config = PlateConfig()
@@ -291,6 +372,7 @@ def main():
     print(f"\nConfigurações:")
     print(f"  Diretório de entrada: {input_dir}")
     print(f"  Diretório de saída:   {output_dir}")
+    print(f"  Diretório de labels:  {labels_dir}")
     print(f"  Largura do corte:     {crop_config.width_percent}% da placa")
     print(f"  Altura do corte:      {crop_config.height_percent}% da placa")
     print(f"  Offset X:             {crop_config.offset_x} px")
@@ -310,6 +392,7 @@ def main():
     
     if not args.dry_run:
         os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(labels_dir, exist_ok=True)
     
     total_crops = 0
     for img_path in image_files:
@@ -318,7 +401,10 @@ def main():
             output_dir,
             plate_config,
             crop_config,
-            args.dry_run
+            args.dry_run,
+            effects,
+            effects_rng,
+            labels_dir
         )
         total_crops += len(saved)
     
