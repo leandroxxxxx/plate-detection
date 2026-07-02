@@ -2,6 +2,10 @@
     "num_plates": 1,
     "versions_per_plate": 3,
     "seed": 42,
+    "plate_border": {
+        "size_percent": 30,
+        "color": [128, 128, 128]
+    },
     "effects": {
         "perspective": {
             "camera_elevation_range": [30, 60],

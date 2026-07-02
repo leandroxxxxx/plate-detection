@@ -1,6 +1,7 @@
 import os
 import json
 import random
+from PIL import ImageOps
 from src.config import PlateConfig
 from src.plate import PlateGenerator
 from src.plate_generator import RandomPlateGenerator
@@ -24,6 +25,39 @@ def random_value(config, key, default, rng, integer=False):
         return rng.randint(int(minimum), int(maximum))
     return rng.uniform(float(minimum), float(maximum))
 
+
+def apply_plate_border(image, border_config):
+    """Adiciona uma borda à placa com tamanho percentual e cor configuráveis."""
+    size_percent = border_config.get("size_percent", 0)
+    color = border_config.get("color", [128, 128, 128])
+
+    if size_percent < 0:
+        raise ValueError("'plate_border.size_percent' deve ser maior ou igual a 0.")
+    if not isinstance(color, list) or len(color) != 3:
+        raise ValueError("'plate_border.color' deve ser uma lista RGB com 3 valores.")
+    if any(not 0 <= channel <= 255 for channel in color):
+        raise ValueError("Cada valor de 'plate_border.color' deve estar entre 0 e 255.")
+
+    border_size = int(round(min(image.size) * (size_percent / 100)))
+    if border_size == 0:
+        return image.copy(), {
+            "size_percent": size_percent,
+            "size_pixels": border_size,
+            "color": color
+        }
+
+    bordered_image = ImageOps.expand(
+        image,
+        border=border_size,
+        fill=tuple(color)
+    )
+    return bordered_image, {
+        "size_percent": size_percent,
+        "size_pixels": border_size,
+        "color": color
+    }
+
+
 def main():
     # Carrega dados de entrada do arquivo JSON
     input_path = os.path.join('data', 'inputs.json')
@@ -34,6 +68,7 @@ def main():
     versions_per_plate = inputs.get("versions_per_plate", 1)
     seed = inputs.get("seed", None)
     effects = inputs.get("effects", {})
+    plate_border_config = inputs.get("plate_border", {})
     base_output_dir = inputs.get("output_dir", "generated-images")
     output_dir = os.path.join(base_output_dir, "plates")
     labels_dir = os.path.join(base_output_dir, "labels")
@@ -67,6 +102,10 @@ def main():
         print(f"\n--- Processando placa: {plate_text} ---")
         print(f"Nº: {count}")
         final_image = generator.create_plate(plate_text)
+        final_image, plate_border = apply_plate_border(
+            final_image,
+            plate_border_config
+        )
         
         for version in range(1, versions_per_plate + 1):
             mb_cfg = effects.get("motion_blur", {})
@@ -125,6 +164,7 @@ def main():
             applied_parameters = {
                 "plate": plate_text,
                 "version": version,
+                "plate_border": plate_border,
                 "motion_blur": {
                     "angle": angle,
                     "intensity": blur_intensity
