@@ -6,6 +6,12 @@
         "size_percent": 30,
         "color": [128, 128, 128]
     },
+    "manual_crop": {
+        "width": 24,
+        "height": 17,
+        "y": 16,
+        "x_positions": [10, 22, 32, 42, 52, 62]
+    },
     "effects": {
         "perspective": {
             "camera_elevation_range": [30, 60],

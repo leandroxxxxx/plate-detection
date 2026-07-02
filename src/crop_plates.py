@@ -15,7 +15,7 @@ import sys
 import json
 import random
 import argparse
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 # Ensure the project root is in sys.path so absolute imports work
 # when running this script directly with `python src/crop_plates.py`
@@ -23,9 +23,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.config import PlateConfig, CropConfig
+from src.config import CropConfig
 from src.post_process import ImageEffectProcessor
-from src.utils import TextUtils
 
 
 def random_value(config, key, default, rng):
@@ -54,144 +53,76 @@ def extract_plate_text_from_filename(filename: str) -> str | None:
     return None
 
 
-def get_character_positions(
-    text: str,
-    font_path: str,
-    font_size: int,
-    text_spacing: int,
-    plate_width: int,
-    plate_height: int
-) -> list[tuple[int, int, int, int]]:
-    """
-    Calcula a posição (x, y, w, h) de cada caractere na placa,
-    replicando a lógica de posicionamento de PlateGenerator.
-
-    Retorna uma lista de tuplas (x, y, largura, altura) para cada caractere.
-    """
-    font = ImageFont.truetype(font_path, font_size)
-    
-    # Cria uma imagem dummy para medir
-    dummy_img = Image.new('RGBA', (plate_width, plate_height), (0, 0, 0, 0))
-    dummy_draw = ImageDraw.Draw(dummy_img)
-    
-    # Altura da faixa azul (1/4 da altura)
-    header_height = plate_height // 4
-    
-    # Largura total do texto
-    total_text_width = TextUtils.get_total_text_width(font, text, text_spacing, dummy_draw)
-    
-    # Posição inicial x (centralizado)
-    start_x = (plate_width - total_text_width) / 2
-    
-    # Altura do caractere
-    _, char_height = TextUtils.get_char_size(font, "A", dummy_draw)
-    
-    # Posição y (centralizado abaixo da faixa azul)
-    start_y = header_height + (plate_height - header_height - char_height) / 2
-    
-    positions = []
-    current_x = start_x
-    
-    for char in text:
-        w, h = TextUtils.get_char_size(font, char, dummy_draw)
-        positions.append((current_x, start_y, w, h))
-        current_x += w + text_spacing
-    
-    return positions
-
-
 def crop_character_pairs(
     image: Image.Image,
     plate_text: str,
-    plate_config: PlateConfig,
-    crop_config: CropConfig
-) -> list[tuple[str, Image.Image]]:
+    manual_crop_config: dict
+) -> list[tuple[str, Image.Image, dict]]:
     """
-    Extrai cortes de pares de caracteres de uma imagem de placa.
+    Extrai cortes manuais de pares de caracteres de uma imagem de placa.
 
-    Para cada par de caracteres consecutivos (i, i+1) do texto da placa,
-    calcula um retângulo de corte centrado no ponto médio entre os dois
-    caracteres, com dimensões definidas em porcentagem no CropConfig.
+    As coordenadas são lidas diretamente da configuração. Se o tamanho da
+    imagem mudar, a configuração também deve ser atualizada.
 
-    Retorna uma lista de tuplas (par_texto, imagem_cortada).
+    Retorna tuplas (par_texto, imagem_cortada, caixa_de_corte).
     """
-    positions = get_character_positions(
-        plate_text,
-        plate_config.font_path,
-        plate_config.font_size,
-        plate_config.text_spacing,
-        plate_config.width,
-        plate_config.height
-    )
-    
     img_width, img_height = image.size
-    
-    # Dimensões do retângulo de corte em pixels
-    crop_w = int(img_width * crop_config.width_percent / 100.0)
-    crop_h = int(img_height * crop_config.height_percent / 100.0)
-    
+
+    crop_w = int(manual_crop_config.get("width", 24))
+    crop_h = int(manual_crop_config.get("height", 17))
+    crop_y = int(manual_crop_config.get("y", 16))
+    x_positions = manual_crop_config.get("x_positions", [])
+
+    if crop_w <= 0 or crop_h <= 0:
+        raise ValueError("'manual_crop.width' e 'manual_crop.height' devem ser maiores que 0.")
+    if not isinstance(x_positions, list):
+        raise ValueError("'manual_crop.x_positions' deve ser uma lista de posições X.")
+
+    expected_pairs = len(plate_text) - 1
+    if len(x_positions) < expected_pairs:
+        raise ValueError(
+            "'manual_crop.x_positions' não possui posições suficientes para "
+            f"{expected_pairs} pares."
+        )
+
     crops = []
-    
+
     # Itera sobre pares de caracteres: (0,1), (1,2), (2,3), ...
     for i in range(len(plate_text) - 1):
         pair_text = plate_text[i:i+2]
-        
-        # Centro do caractere i
-        cx_i = positions[i][0] + positions[i][2] / 2.0
-        # Centro do caractere i+1
-        cx_j = positions[i+1][0] + positions[i+1][2] / 2.0
-        # Ponto médio entre os dois caracteres
-        mid_x = (cx_i + cx_j) / 2.0
-        
-        # Calcula centro y (altura do texto)
-        cy = positions[i][1] + positions[i][3] / 2.0
-        
-        # Converte coordenadas relativas à imagem real
-        scale_x = img_width / plate_config.width
-        scale_y = img_height / plate_config.height
-        
-        mid_x_px = mid_x * scale_x + crop_config.offset_x
-        cy_px = cy * scale_y
-        
-        # Calcula os cantos do retângulo de corte
-        left = int(mid_x_px - crop_w / 2)
-        top = int(cy_px - crop_h / 2)
+
+        left = int(x_positions[i])
+        top = crop_y
         right = left + crop_w
         bottom = top + crop_h
-        
-        # Garante que não ultrapasse os limites da imagem
-        left = max(0, left)
-        top = max(0, top)
-        right = min(img_width, right)
-        bottom = min(img_height, bottom)
-        
-        # Ajusta para manter o crop_w/crop_h se possível
-        # Se o crop encostou na borda esquerda ou direita, reposiciona
-        if left == 0:
-            right = min(crop_w, img_width)
-        elif right == img_width:
-            left = max(0, img_width - crop_w)
-        
-        if top == 0:
-            bottom = min(crop_h, img_height)
-        elif bottom == img_height:
-            top = max(0, img_height - crop_h)
-        
+
+        if left < 0 or top < 0 or right > img_width or bottom > img_height:
+            raise ValueError(
+                f"Corte manual fora dos limites da imagem para o par '{pair_text}': "
+                f"({left}, {top}, {right}, {bottom}) em imagem {img_width}x{img_height}."
+            )
+
         cropped = image.crop((left, top, right, bottom))
-        crops.append((pair_text, cropped))
-    
+        crop_box = {
+            "x": left,
+            "y": top,
+            "width": crop_w,
+            "height": crop_h
+        }
+        crops.append((pair_text, cropped, crop_box))
+
     return crops
 
 
 def process_plate_image(
     image_path: str,
     output_dir: str,
-    plate_config: PlateConfig,
     crop_config: CropConfig,
     dry_run: bool = False,
     effects: dict | None = None,
     rng: random.Random | None = None,
-    labels_dir: str | None = None
+    labels_dir: str | None = None,
+    manual_crop_config: dict | None = None
 ) -> list[str]:
     """
     Processa uma única imagem de placa: extrai os pares e salva os cortes.
@@ -215,8 +146,8 @@ def process_plate_image(
         return []
     
     image = Image.open(image_path).convert('RGB')
-    
-    crops = crop_character_pairs(image, plate_text, plate_config, crop_config)
+
+    crops = crop_character_pairs(image, plate_text, manual_crop_config or {})
     effects = effects or {}
     rng = rng or random.Random()
     
@@ -227,7 +158,7 @@ def process_plate_image(
     
     saved_files = []
     plate_name = os.path.splitext(filename)[0]
-    for pair_index, (pair_text, cropped_img) in enumerate(crops, start=1):
+    for pair_index, (pair_text, cropped_img, crop_box) in enumerate(crops, start=1):
         perspective_cfg = effects.get("perspective", {})
         camera_elevation = random_value(
             perspective_cfg, "camera_elevation", 0, rng
@@ -266,6 +197,7 @@ def process_plate_image(
                 "plate": plate_text,
                 "pair": pair_text,
                 "pair_index": pair_index,
+                "crop_box": crop_box,
                 "perspective": {
                     "camera_elevation": camera_elevation,
                     "horizontal_angle": horizontal_angle
@@ -315,24 +247,6 @@ def main():
         help='Padrão de arquivo para buscar (default: *.jpg)'
     )
     parser.add_argument(
-        '--width-percent',
-        type=float,
-        default=None,
-        help='Sobrescreve a largura do corte em porcentagem da largura da placa'
-    )
-    parser.add_argument(
-        '--height-percent',
-        type=float,
-        default=None,
-        help='Sobrescreve a altura do corte em porcentagem da altura da placa'
-    )
-    parser.add_argument(
-        '--offset-x',
-        type=int,
-        default=None,
-        help='Deslocamento horizontal em pixels para centralizar o corte (default: -1)'
-    )
-    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Apenas lista os pares sem gerar os cortes'
@@ -353,18 +267,11 @@ def main():
     with open(args.config, "r", encoding="utf-8") as config_file:
         inputs = json.load(config_file)
     effects = inputs.get("effects", {})
+    manual_crop_config = inputs.get("manual_crop", {})
     effects_rng = random.Random(inputs.get("seed"))
     
     # Configurações
-    plate_config = PlateConfig()
     crop_config = CropConfig()
-    
-    if args.width_percent is not None:
-        crop_config.width_percent = args.width_percent
-    if args.height_percent is not None:
-        crop_config.height_percent = args.height_percent
-    if args.offset_x is not None:
-        crop_config.offset_x = args.offset_x
     
     print("=" * 60)
     print("CORTE DE PARES DE CARACTERES DE PLACAS")
@@ -373,10 +280,7 @@ def main():
     print(f"  Diretório de entrada: {input_dir}")
     print(f"  Diretório de saída:   {output_dir}")
     print(f"  Diretório de labels:  {labels_dir}")
-    print(f"  Largura do corte:     {crop_config.width_percent}% da placa")
-    print(f"  Altura do corte:      {crop_config.height_percent}% da placa")
-    print(f"  Offset X:             {crop_config.offset_x} px")
-    print(f"  Tamanho da placa:     {plate_config.width}x{plate_config.height}")
+    print(f"  Corte manual:         {manual_crop_config}")
     print(f"  Dry-run:              {'Sim' if args.dry_run else 'Não'}")
     
     # Busca arquivos de imagem
@@ -399,12 +303,12 @@ def main():
         saved = process_plate_image(
             img_path,
             output_dir,
-            plate_config,
             crop_config,
             args.dry_run,
             effects,
             effects_rng,
-            labels_dir
+            labels_dir,
+            manual_crop_config
         )
         total_crops += len(saved)
     
