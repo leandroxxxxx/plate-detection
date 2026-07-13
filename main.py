@@ -108,6 +108,16 @@ def main():
         )
         
         for version in range(1, versions_per_plate + 1):
+            perspective_cfg = effects.get("perspective", {})
+            camera_elevation = random_value(
+                perspective_cfg, "camera_elevation", 0, effects_rng
+            )
+            horizontal_angle = random_value(
+                perspective_cfg, "horizontal_angle", 0, effects_rng
+            )
+            rotation_cfg = effects.get("rotation", {})
+            rotation_angle = random_value(rotation_cfg, "angle", 0, effects_rng)
+
             mb_cfg = effects.get("motion_blur", {})
             angle = random_value(mb_cfg, "angle", 0, effects_rng)
             blur_intensity = random_value(
@@ -136,13 +146,24 @@ def main():
 
             print(
                 f"Versão {version}/{versions_per_plate}: "
+                f"persp(elev={camera_elevation:.2f}, horiz={horizontal_angle:.2f}), "
+                f"rot={rotation_angle:.2f}, "
                 f"blur(angle={angle:.2f}, intensity={blur_intensity}), "
                 f"sharpening={sharp_percent}, noise={noise_intensity:.4f}, "
                 f"h264={degradation_level}"
             )
 
+            # Aplica perspectiva + rotação antes dos demais efeitos
+            processed_image = ImageEffectProcessor.apply_perspective_distortion(
+                final_image,
+                camera_elevation=camera_elevation,
+                horizontal_angle=horizontal_angle
+            )
+            processed_image = ImageEffectProcessor.apply_rotation(
+                processed_image, angle=rotation_angle
+            )
             processed_image = ImageEffectProcessor.apply_motion_blur(
-                final_image, angle=angle, intensity=blur_intensity
+                processed_image, angle=angle, intensity=blur_intensity
             )
             processed_image = ImageEffectProcessor.apply_cctv_sharpening(
                 processed_image, percent=sharp_percent
@@ -165,6 +186,13 @@ def main():
                 "plate": plate_text,
                 "version": version,
                 "plate_border": plate_border,
+                "perspective": {
+                    "camera_elevation": camera_elevation,
+                    "horizontal_angle": horizontal_angle
+                },
+                "rotation": {
+                    "angle": rotation_angle
+                },
                 "motion_blur": {
                     "angle": angle,
                     "intensity": blur_intensity

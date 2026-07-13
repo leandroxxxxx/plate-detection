@@ -24,21 +24,6 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.config import CropConfig
-from src.post_process import ImageEffectProcessor
-
-
-def random_value(config, key, default, rng):
-    """Sorteia um valor decimal no ``<key>_range`` configurado."""
-    value_range = config.get(f"{key}_range")
-    if value_range is None:
-        return default
-    if not isinstance(value_range, list) or len(value_range) != 2:
-        raise ValueError(f"'{key}_range' deve ser uma lista com [mínimo, máximo].")
-
-    minimum, maximum = value_range
-    if minimum > maximum:
-        raise ValueError(f"O mínimo de '{key}_range' não pode ser maior que o máximo.")
-    return rng.uniform(float(minimum), float(maximum))
 
 
 def extract_plate_text_from_filename(filename: str) -> str | None:
@@ -119,8 +104,6 @@ def process_plate_image(
     output_dir: str,
     crop_config: CropConfig,
     dry_run: bool = False,
-    effects: dict | None = None,
-    rng: random.Random | None = None,
     labels_dir: str | None = None,
     manual_crop_config: dict | None = None
 ) -> list[str]:
@@ -148,8 +131,6 @@ def process_plate_image(
     image = Image.open(image_path).convert('RGB')
 
     crops = crop_character_pairs(image, plate_text, manual_crop_config or {})
-    effects = effects or {}
-    rng = rng or random.Random()
     
     # # Cria subdiretório de saída para esta placa (comentado: salva tudo na pasta crop)
     # plate_name = os.path.splitext(filename)[0]
@@ -159,35 +140,14 @@ def process_plate_image(
     saved_files = []
     plate_name = os.path.splitext(filename)[0]
     for pair_index, (pair_text, cropped_img, crop_box) in enumerate(crops, start=1):
-        perspective_cfg = effects.get("perspective", {})
-        camera_elevation = random_value(
-            perspective_cfg, "camera_elevation", 0, rng
-        )
-        horizontal_angle = random_value(
-            perspective_cfg, "horizontal_angle", 0, rng
-        )
-        rotation_cfg = effects.get("rotation", {})
-        rotation_angle = random_value(rotation_cfg, "angle", 0, rng)
-
-        processed_crop = ImageEffectProcessor.apply_perspective_distortion(
-            cropped_img,
-            camera_elevation=camera_elevation,
-            horizontal_angle=horizontal_angle
-        )
-        processed_crop = ImageEffectProcessor.apply_rotation(
-            processed_crop, angle=rotation_angle
-        )
-
         file_suffix = crop_config.file_suffix.strip("_")
         output_stem = f"{plate_name}_{file_suffix}_{pair_index:02d}_{pair_text}"
         output_filename = f"{output_stem}.jpg"
         output_path = os.path.join(output_dir, output_filename)
-        processed_crop.save(output_path, 'JPEG')
+        cropped_img.save(output_path, 'JPEG')
         saved_files.append(output_path)
         print(
-            f"    → Salvo: {output_filename} (tamanho: {processed_crop.size}, "
-            f"elevação: {camera_elevation:.2f}°, lateral: "
-            f"{horizontal_angle:.2f}°, rotação: {rotation_angle:.2f}°)"
+            f"    → Salvo: {output_filename} (tamanho: {cropped_img.size})"
         )
 
         if labels_dir is not None:
@@ -197,14 +157,7 @@ def process_plate_image(
                 "plate": plate_text,
                 "pair": pair_text,
                 "pair_index": pair_index,
-                "crop_box": crop_box,
-                "perspective": {
-                    "camera_elevation": camera_elevation,
-                    "horizontal_angle": horizontal_angle
-                },
-                "rotation": {
-                    "angle": rotation_angle
-                }
+                "crop_box": crop_box
             }
             with open(label_path, "w", encoding="utf-8") as label_file:
                 json.dump(label, label_file, ensure_ascii=False, indent=4)
@@ -266,9 +219,7 @@ def main():
 
     with open(args.config, "r", encoding="utf-8") as config_file:
         inputs = json.load(config_file)
-    effects = inputs.get("effects", {})
     manual_crop_config = inputs.get("manual_crop", {})
-    effects_rng = random.Random(inputs.get("seed"))
     
     # Configurações
     crop_config = CropConfig()
@@ -305,8 +256,6 @@ def main():
             output_dir,
             crop_config,
             args.dry_run,
-            effects,
-            effects_rng,
             labels_dir,
             manual_crop_config
         )

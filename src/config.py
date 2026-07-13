@@ -17,7 +17,7 @@ class WatermarkConfig:
 class PlateConfig:
     # width: int = 520
     # height: int = 130
-    width: int = 80
+    width: int = 40
     height: int = 25
     bg_color: Tuple[int, int, int, int] = (200, 200, 200, 255)
     header_color: Tuple[int, int, int, int] = (0, 51, 153, 255) # Azul Mercosul
