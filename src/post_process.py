@@ -4,6 +4,7 @@ import math
 from PIL import Image, ImageFilter, ImageEnhance
 from typing import List, Sequence, Tuple
 
+
 class ImageEffectProcessor:
     """
     Classe responsável por aplicar filtros e degradações em imagens
@@ -133,6 +134,117 @@ class ImageEffectProcessor:
         )
 
     @staticmethod
+    def apply_3d_perspective(
+        image: Image.Image,
+        pitch: float = 0.0,
+        yaw: float = 0.0,
+        roll: float = 0.0,
+        focal_length: float = 1.0
+    ) -> Image.Image:
+        """
+        Aplica transformação 3D completa (pitch, yaw, roll) com projeção
+        perspectiva, substituindo a antiga perspectiva 2D + rotação.
+
+        Parâmetros:
+            pitch   : Rotação em torno do eixo X (inclinação para frente/trás) em graus.
+            yaw     : Rotação em torno do eixo Y (giro lateral) em graus.
+            roll    : Rotação em torno do eixo Z (rotação no plano) em graus.
+            focal_length : Distância focal relativa (1.0 = natural, >1 = teleobjectiva,
+                           <1 = grande angular).
+        """
+        if pitch == 0.0 and yaw == 0.0 and roll == 0.0:
+            return image.copy()
+
+        width, height = image.size
+        half_w = width / 2.0
+        half_h = height / 2.0
+
+        # Cantos da imagem original
+        src = [(0, 0), (width, 0), (width, height), (0, height)]
+
+        # Cantos em 3D centrados na origem
+        corners_3d = [
+            (-half_w, -half_h, 0.0),
+            ( half_w, -half_h, 0.0),
+            ( half_w,  half_h, 0.0),
+            (-half_w,  half_h, 0.0),
+        ]
+
+        # Matriz de rotação combinada: R = Rz(roll) @ Ry(yaw) @ Rx(pitch)
+        pitch_r = math.radians(pitch)
+        yaw_r = math.radians(yaw)
+        roll_r = math.radians(roll)
+
+        cp, sp = math.cos(pitch_r), math.sin(pitch_r)
+        cy, sy = math.cos(yaw_r),   math.sin(yaw_r)
+        cr, sr = math.cos(roll_r),  math.sin(roll_r)
+
+        # pylint: disable=line-too-long
+        # R = [[cy*cr + sp*sy*sr,  -cy*sr + sp*sy*cr,  cp*sy],
+        #      [cp*sr,             cp*cr,              -sp   ],
+        #      [-sy*cr + sp*cy*sr, sy*sr + sp*cy*cr,   cp*cy ]]
+        # pylint: enable=line-too-long
+
+        # Aplicando Rz @ Ry @ Rx
+        R11 = cy * cr + sp * sy * sr
+        R12 = -cy * sr + sp * sy * cr
+        R13 = cp * sy
+        R21 = cp * sr
+        R22 = cp * cr
+        R23 = -sp
+        R31 = -sy * cr + sp * cy * sr
+        R32 = sy * sr + sp * cy * cr
+        R33 = cp * cy
+
+        # Projeta cada canto 3D para 2D usando o modelo de câmera pinhole
+        distance = max(width, height) * focal_length
+
+        dst = []
+        for p in corners_3d:
+            xr = R11 * p[0] + R12 * p[1] + R13 * p[2]
+            yr = R21 * p[0] + R22 * p[1] + R23 * p[2]
+            zr = R31 * p[0] + R32 * p[1] + R33 * p[2]
+
+            zc = zr + distance
+            if zc <= 0:
+                zc = 0.001
+
+            x_proj = distance * xr / zc + half_w
+            y_proj = distance * yr / zc + half_h
+            dst.append((x_proj, y_proj))
+
+        # Encontra a bounding box dos pontos projetados
+        xs = [p[0] for p in dst]
+        ys = [p[1] for p in dst]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+
+        # Escala os pontos projetados para preencher a imagem de saída
+        bbox_w = max_x - min_x
+        bbox_h = max_y - min_y
+        scale_x = (width - 1) / bbox_w if bbox_w > 0 else 1.0
+        scale_y = (height - 1) / bbox_h if bbox_h > 0 else 1.0
+
+        dst_scaled = [
+            ((p[0] - min_x) * scale_x, (p[1] - min_y) * scale_y)
+            for p in dst
+        ]
+
+        # Calcula os coeficientes da transformação perspectiva
+        coeffs = ImageEffectProcessor._perspective_coefficients(src, dst_scaled)
+
+        # Cor de preenchimento (cantos inferior esquerdo)
+        fill_color = image.getpixel((0, height - 1))
+
+        return image.transform(
+            image.size,
+            Image.Transform.PERSPECTIVE,
+            coeffs,
+            resample=Image.Resampling.BICUBIC,
+            fillcolor=fill_color
+        )
+
+    @staticmethod
     def resize_image(image: Image.Image, size: Tuple[int, int]) -> Image.Image:
         """
         Redimensiona a imagem para o tamanho especificado.
@@ -232,8 +344,8 @@ class ImageEffectProcessor:
         
         :param image: Imagem original (PIL Image).
         :param degradation_level: Inteiro >= 0.
-                                  0-100: Artefatos de compressão JPEG/DCT.
-                                  >100: Artefatos severos + Perda de resolução (Macroblocking).
+                                   0-100: Artefatos de compressão JPEG/DCT.
+                                   >100: Artefatos severos + Perda de resolução (Macroblocking).
         :return: Nova imagem com o efeito aplicado.
         """
         level = max(0, degradation_level)

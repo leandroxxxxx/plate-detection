@@ -1,37 +1,69 @@
 {
     "num_plates": 1,
-    "versions_per_plate": 3,
+    "versions_per_plate": 4,
     "seed": 42,
     "plate_border": {
         "size_percent": 30,
-        "color": [128, 128, 128]
+        "color": [
+            128,
+            128,
+            128
+        ]
     },
     "manual_crop": {
         "width": 29,
         "height": 18,
         "y": 16,
-        "x_positions": [14]
+        "x_positions": [
+            14
+        ]
     },
     "effects": {
-        "perspective": {
-            "camera_elevation_range": [30, 60],
-            "horizontal_angle_range": [-15, 15]
-        },
-        "rotation": {
-            "angle_range": [-5, 5]
+        "perspective_3d": {
+            "pitch_range": [
+                10,
+                45
+            ],
+            "yaw_range": [
+                -15,
+                15
+            ],
+            "roll_range": [
+                -5,
+                5
+            ],
+            "focal_length_range": [
+                0.8,
+                1.5
+            ]
         },
         "motion_blur": {
-            "angle_range": [10, 20],
-            "intensity_range": [0, 2]
+            "angle_range": [
+                10,
+                20
+            ],
+            "intensity_range": [
+                0,
+                2
+            ]
         },
         "sharpening": {
-            "percent_range": [150, 210]
+            "percent_range": [
+                150,
+                210
+            ]
         },
         "noise": {
-            "intensity_range": [0.03, 0.07]
+            "intensity_range": [
+                0.03,
+                0.07
+            ]
         },
         "h264": {
-            "degradation_level_range": [0, 0.1]
+            "degradation_level_range": [
+                80,
+                90
+            ]
         }
     },
     "output_dir": "generated-images"
