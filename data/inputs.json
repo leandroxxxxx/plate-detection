@@ -1,6 +1,7 @@
 {
-    "num_plates": 1,
+    "num_plates": 4,
     "versions_per_plate": 4,
+    "num_chars": 2,
     "seed": 42,
     "plate_border": {
         "size_percent": 30,
@@ -11,11 +12,11 @@
         ]
     },
     "manual_crop": {
-        "width": 29,
-        "height": 18,
-        "y": 16,
+        "width": 60,
+        "height":60,
+        "y": 60,
         "x_positions": [
-            14
+            55
         ]
     },
     "effects": {
@@ -61,8 +62,8 @@
         },
         "h264": {
             "degradation_level_range": [
-                80,
-                90
+                85,
+                92
             ]
         }
     },

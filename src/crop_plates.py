@@ -2,7 +2,7 @@
 Script para extrair cortes de pares de caracteres de imagens de placas.
 
 Para cada placa gerada, ele extrai retângulos de 2 em 2 caracteres.
-Exemplo: placa "AOX5G10" gera os cortes: "AO", "OX", "X5", "5G", "G1", "10"
+Exemplo: placa "ABC" gera os cortes: "AB", "BC"
 
 Uso:
     python -m src.crop_plates
@@ -13,7 +13,6 @@ import os
 import re
 import sys
 import json
-import random
 import argparse
 from PIL import Image
 
@@ -29,9 +28,10 @@ from src.config import CropConfig
 def extract_plate_text_from_filename(filename: str) -> str | None:
     """
     Extrai o texto da placa do nome do arquivo.
-    Ex: 'placa_AOX5G10_h264_lvl0.jpg' -> 'AOX5G10'
+    Ex: 'char2_AB_v01.jpg' -> 'AB'
+    Ex: 'char3_ABC_v01.jpg' -> 'ABC'
     """
-    match = re.search(r'placa_([A-Z0-9]+)(?:_|\.)', filename)
+    match = re.search(r'char\d+_([A-Z0-9]+)_v\d+', filename)
     if match:
         return match.group(1)
     

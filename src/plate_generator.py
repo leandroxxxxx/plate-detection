@@ -5,44 +5,43 @@ from typing import List, Optional
 ALLOWED_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DIGITS = "0123456789"
 
-# Caracteres permitidos para os pares: letras e dígitos
+# Caracteres permitidos
 ALLOWED_CHARS = ALLOWED_LETTERS + DIGITS
 
 
 class RandomPlateGenerator:
-    """Gera pares de caracteres (combinações de 2 caracteres) para placas Mercosul."""
+    """Gera strings de caracteres (1, 2, 3+ caracteres) para placas Mercosul."""
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, num_chars: int = 2):
         self.seed = seed
+        self.num_chars = num_chars
         if seed is not None:
             random.seed(seed)
 
-    def generate_pair(self) -> str:
-        """Gera um par aleatório de 2 caracteres (letra+letra, letra+dígito, dígito+letra ou dígito+dígito)."""
-        c1 = random.choice(ALLOWED_CHARS)
-        c2 = random.choice(ALLOWED_CHARS)
-        return f"{c1}{c2}"
+    def generate_string(self) -> str:
+        """Gera uma string aleatória com ``num_chars`` caracteres."""
+        return "".join(random.choice(ALLOWED_CHARS) for _ in range(self.num_chars))
 
     def generate_plate(self) -> str:
-        """Mantido por compatibilidade: gera um único par de 2 caracteres."""
-        return self.generate_pair()
+        """Mantido por compatibilidade: gera uma única string."""
+        return self.generate_string()
 
     def generate_plates(self, count: int) -> List[str]:
-        """Gera uma lista de pares únicos."""
-        pairs: set = set()
+        """Gera uma lista de strings únicas."""
+        strings: set = set()
         attempts = 0
         max_attempts = count * 10  # Evita loop infinito caso o espaço seja muito pequeno
 
-        while len(pairs) < count and attempts < max_attempts:
-            pairs.add(self.generate_pair())
+        while len(strings) < count and attempts < max_attempts:
+            strings.add(self.generate_string())
             attempts += 1
 
-        if len(pairs) < count:
-            print(f"Aviso: Só foi possível gerar {len(pairs)} pares únicos de {count} solicitados.")
+        if len(strings) < count:
+            print(f"Aviso: Só foi possível gerar {len(strings)} strings únicas de {count} solicitadas.")
 
-        return sorted(list(pairs))
+        return sorted(list(strings))
 
     @staticmethod
-    def total_possible_pairs() -> int:
-        """Calcula o número total de combinações possíveis de pares."""
-        return len(ALLOWED_CHARS) ** 2
+    def total_possible_strings(num_chars: int) -> int:
+        """Calcula o número total de combinações possíveis para N caracteres."""
+        return len(ALLOWED_CHARS) ** num_chars

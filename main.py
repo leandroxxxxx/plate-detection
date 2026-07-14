@@ -65,6 +65,7 @@ def main():
         inputs = json.load(f)
 
     num_plates = inputs.get("num_plates", 1)
+    num_chars = inputs.get("num_chars", 2)
     versions_per_plate = inputs.get("versions_per_plate", 1)
     seed = inputs.get("seed", None)
     effects = inputs.get("effects", {})
@@ -81,8 +82,8 @@ def main():
     effects_rng = random.Random(seed)
 
     # Gera placas aleatórias no formato Mercosul
-    print(f"\n--- Gerando {num_plates} placas aleatórias (seed={seed}) ---")
-    plate_generator = RandomPlateGenerator(seed=seed)
+    print(f"\n--- Gerando {num_plates} placas aleatórias de {num_chars} caracteres (seed={seed}) ---")
+    plate_generator = RandomPlateGenerator(seed=seed, num_chars=num_chars)
     plates_data = plate_generator.generate_plates(num_plates)
     print(f"Total de placas geradas: {len(plates_data)}")
 
@@ -179,7 +180,7 @@ def main():
                 processed_image, degradation_level
             )
 
-            file_stem = f"placa_{plate_text}_v{version:02d}"
+            file_stem = f"char{num_chars}_{plate_text}_v{version:02d}"
             output_image_path = os.path.join(output_dir, f"{file_stem}.jpg")
             output_label_path = os.path.join(labels_dir, f"{file_stem}.json")
 
