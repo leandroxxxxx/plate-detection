@@ -22,10 +22,8 @@ class CropConfig:
         height_percent: Altura do retângulo de corte em porcentagem da altura total da placa.
                         Ex: 100 significa 100% (altura total).
         output_subdir: Subdiretório dentro do diretório de saída para salvar os cortes.
-        file_suffix: Sufixo adicionado ao nome do arquivo original para identificar cortes.
     """
     width_percent: float = 28
     height_percent: float = 100.0
     offset_x: int = 2
     output_subdir: str = "crops"
-    file_suffix: str = "_pair"

@@ -1,6 +1,6 @@
 {
-    "num_plates": 4,
-    "versions_per_plate": 4,
+    "num_plates": 1300,
+    "versions_per_plate": 10,
     "num_chars": 2,
     "seed": 42,
     "plate_border": {

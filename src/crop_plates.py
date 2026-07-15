@@ -22,9 +22,6 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.config import CropConfig
-
-
 def extract_plate_text_from_filename(filename: str) -> str | None:
     """
     Extrai o texto da placa do nome do arquivo.
@@ -102,7 +99,6 @@ def crop_character_pairs(
 def process_plate_image(
     image_path: str,
     output_dir: str,
-    crop_config: CropConfig,
     dry_run: bool = False,
     labels_dir: str | None = None,
     manual_crop_config: dict | None = None
@@ -139,9 +135,8 @@ def process_plate_image(
     
     saved_files = []
     plate_name = os.path.splitext(filename)[0]
-    for pair_index, (pair_text, cropped_img, crop_box) in enumerate(crops, start=1):
-        file_suffix = crop_config.file_suffix.strip("_")
-        output_stem = f"{plate_name}_{file_suffix}_{pair_index:02d}_{pair_text}"
+    for chunk_index, (chunk_text, cropped_img, crop_box) in enumerate(crops, start=1):
+        output_stem = f"crop_{plate_name}"
         output_filename = f"{output_stem}.jpg"
         output_path = os.path.join(output_dir, output_filename)
         cropped_img.save(output_path, 'JPEG')
@@ -155,8 +150,8 @@ def process_plate_image(
             label = {
                 "source_image": filename,
                 "plate": plate_text,
-                "pair": pair_text,
-                "pair_index": pair_index,
+                "chunk": chunk_text,
+                "chunk_index": chunk_index,
                 "crop_box": crop_box
             }
             with open(label_path, "w", encoding="utf-8") as label_file:
@@ -221,9 +216,6 @@ def main():
         inputs = json.load(config_file)
     manual_crop_config = inputs.get("manual_crop", {})
     
-    # Configurações
-    crop_config = CropConfig()
-    
     print("=" * 60)
     print("CORTE DE PARES DE CARACTERES DE PLACAS")
     print("=" * 60)
@@ -254,7 +246,6 @@ def main():
         saved = process_plate_image(
             img_path,
             output_dir,
-            crop_config,
             args.dry_run,
             labels_dir,
             manual_crop_config
