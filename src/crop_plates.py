@@ -35,10 +35,55 @@ def extract_plate_text_from_filename(filename: str) -> str | None:
     return None
 
 
+def apply_levels_filter(
+    image: Image.Image,
+    black_point: int = 64,
+    gamma: float = 1.0,
+    white_point: int = 177
+) -> Image.Image:
+    """
+    Aplica um filtro de níveis (RGB) para esticar o histograma.
+
+    Mapeia o intervalo [black_point, white_point] para [0, 255]
+    com correção gamma. Valores abaixo de black_point vão para 0,
+    valores acima de white_point vão para 255.
+
+    Args:
+        image: Imagem PIL (RGB) a ser processada.
+        black_point: Ponto preto (input) — pixels neste valor viram 0.
+        gamma: Correção gamma (1.0 = linear).
+        white_point: Ponto branco (input) — pixels neste valor viram 255.
+
+    Returns:
+        Nova imagem PIL com o filtro aplicado.
+    """
+    import numpy as np
+
+    img_array = np.array(image, dtype=np.float32)
+
+    # Aplica o mapeamento de níveis para cada canal
+    range_in = white_point - black_point
+    if range_in <= 0:
+        range_in = 1  # evita divisão por zero
+
+    # Normaliza: [black_point, white_point] -> [0.0, 1.0]
+    normalized = (img_array - black_point) / range_in
+    # Clampa para [0, 1]
+    normalized = np.clip(normalized, 0.0, 1.0)
+    # Aplica gamma
+    if gamma != 1.0:
+        normalized = np.power(normalized, 1.0 / gamma)
+    # Converte de volta para [0, 255]
+    output = (normalized * 255).astype(np.uint8)
+
+    return Image.fromarray(output, mode='RGB')
+
+
 def crop_character_pairs(
     image: Image.Image,
     plate_text: str,
-    manual_crop_config: dict
+    manual_crop_config: dict,
+    levels_filter_config: dict | None = None
 ) -> list[tuple[str, Image.Image, dict]]:
     """
     Extrai cortes manuais de pares de caracteres de uma imagem de placa.
@@ -53,19 +98,16 @@ def crop_character_pairs(
     crop_w = int(manual_crop_config.get("width", 24))
     crop_h = int(manual_crop_config.get("height", 17))
     crop_y = int(manual_crop_config.get("y", 16))
-    x_positions = manual_crop_config.get("x_positions", [])
+    crop_x = int(manual_crop_config.get("x", 0))
 
     if crop_w <= 0 or crop_h <= 0:
         raise ValueError("'manual_crop.width' e 'manual_crop.height' devem ser maiores que 0.")
-    if not isinstance(x_positions, list):
-        raise ValueError("'manual_crop.x_positions' deve ser uma lista de posições X.")
 
-    expected_pairs = len(plate_text) - 1
-    if len(x_positions) < expected_pairs:
-        raise ValueError(
-            "'manual_crop.x_positions' não possui posições suficientes para "
-            f"{expected_pairs} pares."
-        )
+    # Configuração do filtro de níveis
+    levels_enabled = levels_filter_config.get("enabled", True) if levels_filter_config else True
+    black_point = levels_filter_config.get("black_point", 64) if levels_filter_config else 64
+    gamma = levels_filter_config.get("gamma", 1.0) if levels_filter_config else 1.0
+    white_point = levels_filter_config.get("white_point", 177) if levels_filter_config else 177
 
     crops = []
 
@@ -73,7 +115,7 @@ def crop_character_pairs(
     for i in range(len(plate_text) - 1):
         pair_text = plate_text[i:i+2]
 
-        left = int(x_positions[i])
+        left = crop_x + i * crop_w
         top = crop_y
         right = left + crop_w
         bottom = top + crop_h
@@ -85,6 +127,16 @@ def crop_character_pairs(
             )
 
         cropped = image.crop((left, top, right, bottom))
+
+        # Aplica filtro de níveis (RGB) com parâmetros do JSON
+        if levels_enabled:
+            cropped = apply_levels_filter(
+                cropped,
+                black_point=black_point,
+                gamma=gamma,
+                white_point=white_point
+            )
+
         crop_box = {
             "x": left,
             "y": top,
@@ -101,7 +153,9 @@ def process_plate_image(
     output_dir: str,
     dry_run: bool = False,
     labels_dir: str | None = None,
-    manual_crop_config: dict | None = None
+    manual_crop_config: dict | None = None,
+    levels_filter_config: dict | None = None,
+    save_labels: bool = True
 ) -> list[str]:
     """
     Processa uma única imagem de placa: extrai os pares e salva os cortes.
@@ -126,7 +180,10 @@ def process_plate_image(
     
     image = Image.open(image_path).convert('RGB')
 
-    crops = crop_character_pairs(image, plate_text, manual_crop_config or {})
+    crops = crop_character_pairs(
+        image, plate_text, manual_crop_config or {},
+        levels_filter_config=levels_filter_config
+    )
     
     # # Cria subdiretório de saída para esta placa (comentado: salva tudo na pasta crop)
     # plate_name = os.path.splitext(filename)[0]
@@ -145,7 +202,7 @@ def process_plate_image(
             f"    → Salvo: {output_filename} (tamanho: {cropped_img.size})"
         )
 
-        if labels_dir is not None:
+        if save_labels and labels_dir is not None:
             label_path = os.path.join(labels_dir, f"{output_stem}.json")
             label = {
                 "source_image": filename,
@@ -215,6 +272,9 @@ def main():
     with open(args.config, "r", encoding="utf-8") as config_file:
         inputs = json.load(config_file)
     manual_crop_config = inputs.get("manual_crop", {})
+    save_labels = inputs.get("save_labels", True)
+    effects = inputs.get("effects", {})
+    levels_filter_config = effects.get("levels_filter", {})
     
     print("=" * 60)
     print("CORTE DE PARES DE CARACTERES DE PLACAS")
@@ -223,7 +283,9 @@ def main():
     print(f"  Diretório de entrada: {input_dir}")
     print(f"  Diretório de saída:   {output_dir}")
     print(f"  Diretório de labels:  {labels_dir}")
+    print(f"  Salvar labels:        {'Sim' if save_labels else 'Não'}")
     print(f"  Corte manual:         {manual_crop_config}")
+    print(f"  Filtro de níveis:     {levels_filter_config}")
     print(f"  Dry-run:              {'Sim' if args.dry_run else 'Não'}")
     
     # Busca arquivos de imagem
@@ -239,7 +301,8 @@ def main():
     
     if not args.dry_run:
         os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(labels_dir, exist_ok=True)
+        if save_labels:
+            os.makedirs(labels_dir, exist_ok=True)
     
     total_crops = 0
     for img_path in image_files:
@@ -248,7 +311,9 @@ def main():
             output_dir,
             args.dry_run,
             labels_dir,
-            manual_crop_config
+            manual_crop_config,
+            levels_filter_config,
+            save_labels
         )
         total_crops += len(saved)
     
