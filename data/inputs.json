@@ -1,6 +1,6 @@
 {
     "num_plates": 1300,
-    "versions_per_plate": 10,
+    "versions_per_plate": 100,
     "num_chars": 2,
     "seed": 42,
     "save_labels": false,
@@ -13,14 +13,27 @@
         ]
     },
     "manual_crop": {
-        "width": 35,
-        "height":35,
-        "x": 62,
-        "y": 62
+        "width": 60,
+        "height": 60,
+        "x": 55,
+        "y": 60
+    },
+    "detect_and_crop": {
+        "enabled": true,
+        "input_dir": "generated-images/crop",
+        "output_dir": "generated-images/detected",
+        "output_size": 30,
+        "binarization_threshold": 200,
+        "min_blob_area": 8,
+        "validation": {
+            "enabled": true,
+            "max_white_pixels_percent": 95,
+            "min_character_area_percent": 1.0
+        }
     },
     "effects": {
         "perspective_3d": {
-            "enabled": false,
+            "enabled": true,
             "pitch_range": [
                 10,
                 45
@@ -45,8 +58,8 @@
                 20
             ],
             "intensity_range": [
-                0,
-                2
+                3,
+                10
             ]
         },
         "sharpening": {
@@ -66,7 +79,7 @@
         "h264": {
             "enabled": true,
             "degradation_level_range": [
-                85,
+                88,
                 92
             ]
         },
