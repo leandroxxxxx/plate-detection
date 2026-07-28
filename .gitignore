@@ -1,4 +1,5 @@
 __pycache__/
 generated-images/
+outputs/
 test/*.jpg
 .*
