@@ -1,0 +1,44 @@
+[
+  {
+    "t": 0.0,
+    "azimuth": -20,
+    "elevation": 10,
+    "distance": 3.0
+  },
+  {
+    "t": 0.2,
+    "azimuth": -30,
+    "elevation": 30,
+    "distance": 2.5
+  },
+  {
+    "t": 0.4,
+    "azimuth": -40,
+    "elevation": 50,
+    "distance": 4.0
+  },
+    {
+    "t": 0.5,
+    "azimuth": -50,
+    "elevation": 50,
+    "distance": 10
+  },
+  {
+    "t": 0.6,
+    "azimuth": -40,
+    "elevation": 20,
+    "distance": 3.5
+  },
+  {
+    "t": 0.8,
+    "azimuth": -50,
+    "elevation": 40,
+    "distance": 2.0
+  },
+  {
+    "t": 1.0,
+    "azimuth": -60,
+    "elevation": 10,
+    "distance": 3.0
+  }
+]

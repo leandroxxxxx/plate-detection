@@ -257,6 +257,22 @@ def setup_camera_animation(target_obj, radius, args, total_frames):
     else:
         waypoints = None
 
+    # Configure the camera near/far clip planes relative to the furthest camera
+    # position reached during the animation. The camera "distance" is a multiple
+    # of the object radius (see below), so without this the object can fall
+    # beyond Blender's default far clip plane (1000) when the distance is large
+    # (e.g. 20 * radius > 1000) and silently disappear from the render.
+    if use_waypoints:
+        max_distance_mult = max(wp["distance"] for wp in waypoints)
+    else:
+        max_distance_mult = args.dist_max
+    max_camera_distance = radius * max_distance_mult
+
+    cam.data.clip_start = max(0.0001, max_camera_distance * 0.001)
+    cam.data.clip_end = max_camera_distance * 2.0
+    print(f"[render_obj_video] Camera clip: start={cam.data.clip_start:.2f} "
+          f"end={cam.data.clip_end:.2f} (max camera distance ~{max_camera_distance:.2f})")
+
     for frame in range(1, total_frames + 1):
         t = (frame - 1) / max(total_frames - 1, 1)  # 0.0 -> 1.0 across the video
 

@@ -20,8 +20,8 @@ BLENDER_SCRIPT = os.path.join(ROOT, "src", "render_obj_video.py")
 OBJ_PATH = os.path.join(ROOT, "outputs", "texto_3d.obj")
 OUT_PATH = os.path.join(ROOT, "outputs", "video.mp4")
 
-DURATION = 10
-FPS = 10
+DURATION = 5
+FPS = 8
 WAYPOINTS = os.path.join(ROOT, "data", "waypoints.json")   # set to None to use orbit mode
 
 

@@ -3,3 +3,5 @@ generated-images/
 outputs/
 test/*.jpg
 .*
+!.clinerules/
+!.clinerules/**
