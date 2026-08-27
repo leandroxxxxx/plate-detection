@@ -24,6 +24,11 @@ DURATION = 5
 FPS = 8
 WAYPOINTS = os.path.join(ROOT, "data", "waypoints.json")   # set to None to use orbit mode
 
+# Orbit-mode camera pan (multiple of object radius). Waypoints can also define
+# their own pan_x/pan_y per entry.
+PAN_X = 0.0      # horizontal camera pan (multiple of object radius)
+PAN_Y = 0.0      # vertical camera pan (multiple of object radius)
+
 
 def main():
     print(f"[run_render] OBJ file : {OBJ_PATH}")
@@ -58,6 +63,8 @@ def main():
         print(f"[run_render] Waypoints: {WAYPOINTS}")
     else:
         print("[run_render] Waypoints: none (using orbit mode)")
+
+    cmd.extend(["--pan-x", str(PAN_X), "--pan-y", str(PAN_Y)])
 
     print(f"[run_render] Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, shell=False)

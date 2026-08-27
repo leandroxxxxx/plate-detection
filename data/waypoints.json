@@ -2,13 +2,49 @@
   {
     "t": 0.0,
     "azimuth": -35,
-    "elevation": 10,
-    "distance": 50
+    "elevation": 15,
+    "distance": 6.5,
+    "pan_x": -2.6,
+    "pan_y": -0.8
+  },
+  {
+    "t": 0.2,
+    "azimuth": -55,
+    "elevation": 32,
+    "distance": 8.0,
+    "pan_x": -1.5,
+    "pan_y": 0.8
+  },
+  {
+    "t": 0.4,
+    "azimuth": -80,
+    "elevation": 18,
+    "distance": 9.8,
+    "pan_x": -0.3,
+    "pan_y": -0.8
+  },
+  {
+    "t": 0.6,
+    "azimuth": -105,
+    "elevation": 30,
+    "distance": 11.5,
+    "pan_x": 0.9,
+    "pan_y": 0.8
+  },
+  {
+    "t": 0.8,
+    "azimuth": -125,
+    "elevation": 16,
+    "distance": 13.0,
+    "pan_x": 1.9,
+    "pan_y": -0.5
   },
   {
     "t": 1.0,
     "azimuth": -145,
-    "elevation": 10,
-    "distance": 50
+    "elevation": 20,
+    "distance": 14.5,
+    "pan_x": 2.7,
+    "pan_y": 0.2
   }
 ]

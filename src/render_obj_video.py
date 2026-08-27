@@ -75,6 +75,10 @@ def parse_args():
                         help="Render engine (EEVEE is faster, CYCLES is more realistic)")
     parser.add_argument("--waypoints", type=str, default=None,
                         help="Path to JSON file with camera waypoints (overrides orbit/elev/dist params)")
+    parser.add_argument("--pan-x", type=float, default=0.0,
+                        help="Horizontal camera pan amplitude (multiple of object radius)")
+    parser.add_argument("--pan-y", type=float, default=0.0,
+                        help="Vertical camera pan amplitude (multiple of object radius)")
     return parser.parse_args(argv)
 
 
@@ -129,34 +133,39 @@ def add_black_material(obj):
         obj.data.materials.append(mat)
 
 
-def get_object_radius(obj):
-    """Return an approximate radius (bounding sphere) to scale the camera."""
+def get_object_bounds(obj):
+    """Return center point, approximate radius and bounding box dimensions."""
     bbox_corners = [obj.matrix_world @ v.co for v in obj.data.vertices]
     xs = [v.x for v in bbox_corners]
     ys = [v.y for v in bbox_corners]
     zs = [v.z for v in bbox_corners]
-    dx = max(xs) - min(xs)
-    dy = max(ys) - min(ys)
-    dz = max(zs) - min(zs)
-    return max(dx, dy, dz, 0.01) / 2.0
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    min_z, max_z = min(zs), max(zs)
+    center = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0)
+    dx = max_x - min_x
+    dy = max_y - min_y
+    dz = max_z - min_z
+    radius = max(dx, dy, dz, 0.01) / 2.0
+    return center, radius, (dx, dy, dz)
 
 
 # ---------------------------------------------------------------------------
 # Simple studio lighting (key + fill)
 # ---------------------------------------------------------------------------
-def setup_lighting(radius):
+def setup_lighting(center, radius):
     key_light_data = bpy.data.lights.new(name="KeyLight", type="AREA")
     key_light_data.energy = 800 * radius
     key_light_data.size = radius * 2
     key_light = bpy.data.objects.new(name="KeyLight", object_data=key_light_data)
-    key_light.location = (radius * 2.5, -radius * 2.5, radius * 3)
+    key_light.location = (center[0] + radius * 2.5, center[1] - radius * 2.5, center[2] + radius * 3)
     bpy.context.collection.objects.link(key_light)
 
     fill_light_data = bpy.data.lights.new(name="FillLight", type="AREA")
     fill_light_data.energy = 300 * radius
     fill_light_data.size = radius * 3
     fill_light = bpy.data.objects.new(name="FillLight", object_data=fill_light_data)
-    fill_light.location = (-radius * 3, -radius * 1.5, radius * 1.5)
+    fill_light.location = (center[0] - radius * 3, center[1] - radius * 1.5, center[2] + radius * 1.5)
     bpy.context.collection.objects.link(fill_light)
 
 
@@ -180,6 +189,13 @@ def load_waypoints(path):
             raise KeyError(
                 f"Waypoint {i} is missing keys. Required: {required_keys}"
             )
+
+    # Optional camera pans (in units of object radius). Default to 0 so the
+    # waypoint JSON stays minimal when pan is not used.
+    for wp in waypoints:
+        wp.setdefault("pan_x", 0.0)
+        wp.setdefault("pan_y", 0.0)
+        wp.setdefault("pan_z", 0.0)
 
     # Sort by t just in case
     waypoints.sort(key=lambda wp: wp["t"])
@@ -208,7 +224,7 @@ def lerp(a, b, t):
 
 
 def sample_waypoints(waypoints, t):
-    """Interpolate (azimuth, elevation, distance) at normalised time t."""
+    """Interpolate (azimuth, elevation, distance, pan_x, pan_y, pan_z) at normalised time t."""
     # Clamp t to [0, 1]
     t = max(0.0, min(1.0, t))
 
@@ -222,25 +238,40 @@ def sample_waypoints(waypoints, t):
             azimuth = lerp(wp_a["azimuth"], wp_b["azimuth"], s)
             elevation = lerp(wp_a["elevation"], wp_b["elevation"], s)
             distance = lerp(wp_a["distance"], wp_b["distance"], s)
-            return azimuth, elevation, distance
+            pan_x = lerp(wp_a.get("pan_x", 0.0), wp_b.get("pan_x", 0.0), s)
+            pan_y = lerp(wp_a.get("pan_y", 0.0), wp_b.get("pan_y", 0.0), s)
+            pan_z = lerp(wp_a.get("pan_z", 0.0), wp_b.get("pan_z", 0.0), s)
+            return azimuth, elevation, distance, pan_x, pan_y, pan_z
 
     # Fallback (shouldn't happen due to clamping)
-    return waypoints[-1]["azimuth"], waypoints[-1]["elevation"], waypoints[-1]["distance"]
+    wp = waypoints[-1]
+    return (
+        wp["azimuth"],
+        wp["elevation"],
+        wp["distance"],
+        wp.get("pan_x", 0.0),
+        wp.get("pan_y", 0.0),
+        wp.get("pan_z", 0.0),
+    )
 
 
 # ---------------------------------------------------------------------------
-# Camera + animation (orbit varying azimuth angle, elevation and distance)
+# Camera + animation (moving focus target and camera location)
 # ---------------------------------------------------------------------------
-def setup_camera_animation(target_obj, radius, args, total_frames):
+def setup_camera_animation(target_obj, center, radius, args, total_frames):
     cam_data = bpy.data.cameras.new("Camera")
     cam = bpy.data.objects.new("Camera", cam_data)
     bpy.context.collection.objects.link(cam)
     bpy.context.scene.camera = cam
 
-    # "Track To" makes the camera always look at the object, so we only
-    # need to animate its position (orbit), not its rotation directly.
+    # Create an animated Empty target so the camera can pan/translate
+    # across the scene rather than being locked to a stationary origin.
+    cam_target = bpy.data.objects.new("CameraTarget", None)
+    bpy.context.collection.objects.link(cam_target)
+    cam_target.location = center
+
     track = cam.constraints.new(type="TRACK_TO")
-    track.target = target_obj
+    track.target = cam_target
     track.track_axis = "TRACK_NEGATIVE_Z"
     track.up_axis = "UP_Y"
 
@@ -257,15 +288,13 @@ def setup_camera_animation(target_obj, radius, args, total_frames):
     else:
         waypoints = None
 
-    # Configure the camera near/far clip planes relative to the furthest camera
-    # position reached during the animation. The camera "distance" is a multiple
-    # of the object radius (see below), so without this the object can fall
-    # beyond Blender's default far clip plane (1000) when the distance is large
-    # (e.g. 20 * radius > 1000) and silently disappear from the render.
     if use_waypoints:
-        max_distance_mult = max(wp["distance"] for wp in waypoints)
+        max_distance_mult = max(wp["distance"] for wp in waypoints) + max(
+            math.sqrt(wp.get("pan_x", 0.0)**2 + wp.get("pan_y", 0.0)**2 + wp.get("pan_z", 0.0)**2)
+            for wp in waypoints
+        )
     else:
-        max_distance_mult = args.dist_max
+        max_distance_mult = args.dist_max + max(abs(args.pan_x), abs(args.pan_y))
     max_camera_distance = radius * max_distance_mult
 
     cam.data.clip_start = max(0.0001, max_camera_distance * 0.001)
@@ -278,7 +307,7 @@ def setup_camera_animation(target_obj, radius, args, total_frames):
 
         if use_waypoints:
             # Sample from waypoints
-            azimuth_deg, elevation_deg, dist_mult = sample_waypoints(waypoints, t)
+            azimuth_deg, elevation_deg, dist_mult, pan_x, pan_y, pan_z = sample_waypoints(waypoints, t)
             azimuth = math.radians(azimuth_deg)
             elevation = math.radians(elevation_deg)
             distance = radius * dist_mult
@@ -293,21 +322,52 @@ def setup_camera_animation(target_obj, radius, args, total_frames):
                 args.dist_min + (args.dist_max - args.dist_min) *
                 (0.5 - 0.5 * math.cos(2 * math.pi * t))
             )
+            phase = 2.0 * math.pi * args.orbits * t if args.orbits > 0 else 2.0 * math.pi * t
+            pan_x = args.pan_x * math.sin(phase)
+            pan_y = args.pan_y * math.cos(phase)
+            pan_z = 0.0
 
-        x = distance * math.cos(elevation) * math.cos(azimuth)
-        y = distance * math.cos(elevation) * math.sin(azimuth)
-        z = distance * math.sin(elevation)
+        # Right vector perpendicular to azimuth in the XY plane
+        rx = math.sin(azimuth)
+        ry = -math.cos(azimuth)
+        rz = 0.0
 
-        cam.location = (x, y, z)
+        # Up vector perpendicular to view direction
+        ux = -math.sin(elevation) * math.cos(azimuth)
+        uy = -math.sin(elevation) * math.sin(azimuth)
+        uz = math.cos(elevation)
+
+        # Forward vector from target to camera
+        fx = math.cos(elevation) * math.cos(azimuth)
+        fy = math.cos(elevation) * math.sin(azimuth)
+        fz = math.sin(elevation)
+
+        # Translate target position along horizontal and vertical camera pans
+        target_pos = (
+            center[0] + (rx * pan_x + ux * pan_y) * radius,
+            center[1] + (ry * pan_x + uy * pan_y) * radius,
+            center[2] + (rz * pan_x + uz * pan_y + pan_z) * radius,
+        )
+
+        cam_pos = (
+            target_pos[0] + fx * distance,
+            target_pos[1] + fy * distance,
+            target_pos[2] + fz * distance,
+        )
+
+        cam_target.location = target_pos
+        cam_target.keyframe_insert(data_path="location", frame=frame)
+
+        cam.location = cam_pos
         cam.keyframe_insert(data_path="location", frame=frame)
 
-    # Smooth interpolation between keyframes
-    if cam.animation_data and cam.animation_data.action:
-        for fcurve in cam.animation_data.action.fcurves:
-            for kp in fcurve.keyframe_points:
-                kp.interpolation = "BEZIER"
-                kp.handle_left_type = "AUTO_CLAMPED"
-                kp.handle_right_type = "AUTO_CLAMPED"
+    for anim_obj in (cam, cam_target):
+        if anim_obj.animation_data and anim_obj.animation_data.action:
+            for fcurve in anim_obj.animation_data.action.fcurves:
+                for kp in fcurve.keyframe_points:
+                    kp.interpolation = "BEZIER"
+                    kp.handle_left_type = "AUTO_CLAMPED"
+                    kp.handle_right_type = "AUTO_CLAMPED"
 
     return cam
 
@@ -351,10 +411,10 @@ def main():
     clear_scene()
     obj = import_obj(args.obj)
     add_black_material(obj)
-    radius = get_object_radius(obj)
+    center, radius, _ = get_object_bounds(obj)
 
-    setup_lighting(radius)
-    setup_camera_animation(obj, radius, args, total_frames)
+    setup_lighting(center, radius)
+    setup_camera_animation(obj, center, radius, args, total_frames)
     setup_render(args, total_frames)
 
     print(f"[render_obj_video] Engine: {args.engine} "
