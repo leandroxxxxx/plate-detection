@@ -1,0 +1,1 @@
+"""Renderer package for Blender headless video rendering."""
