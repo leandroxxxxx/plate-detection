@@ -79,6 +79,8 @@ def parse_args():
                         help="Horizontal camera pan amplitude (multiple of object radius)")
     parser.add_argument("--pan-y", type=float, default=0.0,
                         help="Vertical camera pan amplitude (multiple of object radius)")
+    parser.add_argument("--bg-color", type=str, default="white",
+                        help="Background color ('white', 'green', 'black', or hex '#FFFFFF')")
     return parser.parse_args(argv)
 
 
@@ -119,13 +121,42 @@ def import_obj(path):
     return obj
 
 
+def parse_color(color_str):
+    """Parse color string ('white', 'black', 'green', or hex '#FFFFFF') to RGBA tuple."""
+    color_str = color_str.strip().lower()
+    color_presets = {
+        "white": (1.0, 1.0, 1.0, 1.0),
+        "black": (0.0, 0.0, 0.0, 1.0),
+        "green": (0.0, 1.0, 0.0, 1.0),
+        "blue": (0.0, 0.0, 1.0, 1.0),
+    }
+    if color_str in color_presets:
+        return color_presets[color_str]
+    if color_str.startswith("#"):
+        hex_val = color_str.lstrip("#")
+        if len(hex_val) == 6:
+            r = int(hex_val[0:2], 16) / 255.0
+            g = int(hex_val[2:4], 16) / 255.0
+            b = int(hex_val[4:6], 16) / 255.0
+            return (r, g, b, 1.0)
+    return (1.0, 1.0, 1.0, 1.0)
+
+
 def add_black_material(obj):
-    """Assign a black diffuse material to the object (characters should be black)."""
+    """Assign a pure matte black material to the object for maximum contrast."""
     mat = bpy.data.materials.new(name="BlackChars")
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes.get("Principled BSDF")
     if bsdf:
-        bsdf.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1.0)  # black
+        if "Base Color" in bsdf.inputs:
+            bsdf.inputs["Base Color"].default_value = (0.0, 0.0, 0.0, 1.0)
+        if "Roughness" in bsdf.inputs:
+            bsdf.inputs["Roughness"].default_value = 1.0
+        # Blender 4.0+ uses 'Specular IOR Level', older versions use 'Specular'
+        if "Specular IOR Level" in bsdf.inputs:
+            bsdf.inputs["Specular IOR Level"].default_value = 0.0
+        elif "Specular" in bsdf.inputs:
+            bsdf.inputs["Specular"].default_value = 0.0
     # Assign to object
     if obj.data.materials:
         obj.data.materials[0] = mat
@@ -391,12 +422,19 @@ def setup_render(args, total_frames):
 
     scene.render.filepath = args.out
 
-    # White background
+    # Configure color management to Standard so pure white (#FFFFFF) is not compressed into gray
+    if hasattr(scene, "view_settings"):
+        scene.view_settings.view_transform = "Standard"
+        scene.view_settings.look = "None"
+
+    # Emissive background
     scene.world = scene.world or bpy.data.worlds.new("World")
     scene.world.use_nodes = True
     bg = scene.world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs[0].default_value = (1.0, 1.0, 1.0, 1.0)  # white
+        bg.inputs[0].default_value = parse_color(args.bg_color)
+        if "Strength" in bg.inputs:
+            bg.inputs["Strength"].default_value = 1.0
 
 
 # ---------------------------------------------------------------------------

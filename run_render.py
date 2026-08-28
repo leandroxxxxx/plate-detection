@@ -23,6 +23,7 @@ OUT_PATH = os.path.join(ROOT, "outputs", "video.mp4")
 DURATION = 5
 FPS = 8
 WAYPOINTS = os.path.join(ROOT, "data", "waypoints.json")   # set to None to use orbit mode
+BG_COLOR = "white"                                        # "white", "black", "green", or "#FFFFFF"
 
 # Orbit-mode camera pan (multiple of object radius). Waypoints can also define
 # their own pan_x/pan_y per entry.
@@ -65,6 +66,7 @@ def main():
         print("[run_render] Waypoints: none (using orbit mode)")
 
     cmd.extend(["--pan-x", str(PAN_X), "--pan-y", str(PAN_Y)])
+    cmd.extend(["--bg-color", BG_COLOR])
 
     print(f"[run_render] Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, shell=False)
